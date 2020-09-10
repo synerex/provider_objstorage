@@ -75,14 +75,12 @@ func mbusCallback(clt *sxutil.SXServiceClient, mm *api.MbusMsg) {
 }
 
 func supplyStorageCallback(clt *sxutil.SXServiceClient, dm *api.Demand) {
-	storageInfo := &storage.Storage{}
-	log.Printf("Demand! %v", dm)
-
 	if dm.DemandName == "Storage" {
+		storageInfo := &storage.Storage{}
 		err := proto.Unmarshal(dm.Cdata.Entity, storageInfo)
 		if err == nil { /// lets start subscribe pcounter.
 			if dm.TargetId == 0 { // notifyDemand
-				log.Printf("Notify Demand! %v", storageInfo)
+				log.Printf("Receive Notify Demand! %v", storageInfo)
 
 				if storageInfo.Stype == storage.StorageType_TYPE_OBJSTORE && storageInfo.Dtype == storage.DataType_DATA_FILE {
 					log.Printf("Type OK")
@@ -97,11 +95,14 @@ func supplyStorageCallback(clt *sxutil.SXServiceClient, dm *api.Demand) {
 					log.Printf("Propose Supply %v", spo)
 				}
 			} else if dm.TargetId == uint64(clt.ClientID) { // selected!
+				log.Printf("Select Demand! %v", storageInfo)
 				clt.Confirm(sxutil.IDType(dm.SenderId)) // send confirm to sender!
 				// now mbus id was set!
 				log.Printf("selected! send confirm %v", dm)
 
 				go clt.SubscribeMbus(context.Background(), mbusCallback)
+			} else {
+				log.Printf("Why this demand? %v", dm)
 			}
 		}
 	}
@@ -142,32 +143,12 @@ func main() {
 
 	if client == nil {
 		log.Fatal("Can't connect Synerex Server")
-	} else {
-		log.Print("Connecting SynerexServer")
+		return
 	}
 
 	st_client := sxutil.NewSXServiceClient(client, pbase.STORAGE_SERVICE, "{Client:PCObjStore}")
-
 	log.Print("Subscribe Storage Demand")
 	go subscribeStorageDemand(st_client)
-
-	storageInfo := storage.Storage{
-		Stype: storage.StorageType_TYPE_OBJSTORE,
-		Dtype: storage.DataType_DATA_FILE,
-	}
-
-	out, err := proto.Marshal(&storageInfo)
-	if err == nil {
-		cont := api.Content{Entity: out}
-		// Register supply
-		dmo := sxutil.DemandOpts{
-			Name:  "Storage",
-			Cdata: &cont,
-		}
-		//			fmt.Printf("Res: %v",smo)
-		//_, _ :=
-		st_client.NotifyDemand(&dmo)
-	}
 
 	wg.Add(1)
 	//	go subscribePCounterSupply(pc_client)
